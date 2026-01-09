@@ -8,7 +8,7 @@ Winning is not just about positioning, but **timing your aggression with the cyc
 ---
 
 ## 🎮 Play the Game
-👉 https://USERNAME.github.io/eclipse-and-dawn/
+👉 https://jayjain-code.github.io/Eclipse-Dawn/
 
 *(Playable on desktop and mobile)*
 
