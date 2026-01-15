@@ -1,123 +1,200 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eclipse & Dawn: Online</title>
+    <title>Eclipse & Dawn</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@400;700&display=swap');
-        body { font-family: 'Lato', sans-serif; overflow: hidden; transition: background-color 1.5s ease; }
-        h1, h2, h3, .fantasy-font { font-family: 'Cinzel', serif; }
-        .board-container { transform: perspective(1000px) rotateX(15deg); transform-style: preserve-3d; transition: transform 0.5s; }
-        @media (max-width: 768px) { .board-container { transform: none; } }
-        .tile { transition: all 0.3s ease; position: relative; }
-        .tile:hover { filter: brightness(1.2); transform: translateY(-2px); z-index: 10; }
+
+        body {
+            font-family: 'Lato', sans-serif;
+            overflow: hidden;
+            transition: background-color 1.5s ease;
+        }
+
+        h1, h2, h3, .fantasy-font {
+            font-family: 'Cinzel', serif;
+        }
+
+        /* Board Perspective */
+        .board-container {
+            transform: perspective(1000px) rotateX(15deg);
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+        }
         
-        /* Animations */
-        .highlight-move { background-color: rgba(34, 197, 94, 0.3); box-shadow: inset 0 0 15px rgba(34, 197, 94, 0.6); }
-        .highlight-attack { background-color: rgba(239, 68, 68, 0.3); box-shadow: inset 0 0 15px rgba(239, 68, 68, 0.6); }
-        .selected-tile { box-shadow: inset 0 0 0 4px #fbbf24; }
+        @media (max-width: 768px) {
+            .board-container {
+                transform: none; /* Flatten on mobile for better touch targets */
+            }
+        }
+
+        /* Tile Styles */
+        .tile {
+            transition: all 0.3s ease;
+            position: relative;
+        }
         
-        /* Phases */
+        .tile:hover {
+            filter: brightness(1.2);
+            transform: translateY(-2px);
+            z-index: 10;
+        }
+
+        /* Game Piece Animations */
+        .piece {
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .piece-enter {
+            animation: dropIn 0.5s ease-out;
+        }
+
+        @keyframes dropIn {
+            0% { opacity: 0; transform: translateY(-50px) scale(1.5); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .highlight-move {
+            background-color: rgba(34, 197, 94, 0.3); /* Green tint */
+            box-shadow: inset 0 0 15px rgba(34, 197, 94, 0.6);
+        }
+        
+        .highlight-attack {
+            background-color: rgba(239, 68, 68, 0.3); /* Red tint */
+            box-shadow: inset 0 0 15px rgba(239, 68, 68, 0.6);
+        }
+
+        .selected-tile {
+            box-shadow: inset 0 0 0 4px #fbbf24;
+        }
+
+        /* Dynamic Backgrounds */
         .bg-phase-dawn { background: linear-gradient(135deg, #2c3e50, #fd746c); }
         .bg-phase-day { background: linear-gradient(135deg, #fceabb, #f8b500); }
         .bg-phase-dusk { background: linear-gradient(135deg, #4b6cb7, #182848); }
         .bg-phase-night { background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); }
         .bg-phase-eclipse { background: linear-gradient(135deg, #232526, #414345); }
+
+        /* UI Elements */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+
+        .text-glow {
+            text-shadow: 0 0 10px rgba(255,255,255,0.7);
+        }
         
-        .glass-panel { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37); }
+        /* Particle effects */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            animation: float 2s linear forwards;
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-50px) scale(0); opacity: 0; }
+        }
+
     </style>
 </head>
 <body class="h-screen w-screen flex flex-col items-center justify-center text-white bg-phase-dawn transition-colors duration-1000" id="gameBody">
 
-    <div id="lobbyScreen" class="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
-        <div class="glass-panel p-8 rounded-2xl max-w-lg text-center mx-4 w-full">
+    <!-- Modal: Rules / Start -->
+    <div id="startModal" class="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div class="glass-panel p-8 rounded-2xl max-w-lg text-center mx-4">
             <h1 class="text-5xl mb-2 text-yellow-400">Eclipse & Dawn</h1>
-            <p class="text-gray-300 mb-8">Online Multiplayer (Fixed)</p>
+            <p class="text-xl italic text-gray-300 mb-6">A Strategic Battle for Celestial Dominance</p>
             
-            <div class="space-y-4">
-                <button onclick="createGame()" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-lg fantasy-font">
-                    Create New Game (Host)
-                </button>
-                <div class="relative py-2"><div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-600"></div></div><div class="relative flex justify-center"><span class="bg-black px-2 text-sm text-gray-500">OR</span></div></div>
-                <div class="flex gap-2">
-                    <input type="text" id="joinInput" placeholder="Enter Game ID" class="bg-black/50 border border-gray-600 rounded px-4 py-2 w-full text-center uppercase tracking-widest text-white focus:outline-none focus:border-yellow-500">
-                    <button onclick="joinGame()" class="bg-blue-700 hover:bg-blue-600 text-white font-bold px-6 rounded-lg fantasy-font">Join</button>
+            <div class="text-left bg-black/40 p-4 rounded-lg mb-6 space-y-3 text-sm">
+                <p><strong>Goal:</strong> Destroy the enemy <span class="text-yellow-400 font-bold">Essence</span> (King).</p>
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">☀️</span>
+                    <p><strong>Day Phase:</strong> Solari units gain +1 Range. Lunari units lose Range.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">🌙</span>
+                    <p><strong>Night Phase:</strong> Lunari units gain +1 Range. Solari units lose Range.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">🌑</span>
+                    <p><strong>Eclipse:</strong> Both sides fight at maximum power!</p>
                 </div>
             </div>
-            <p id="lobbyStatus" class="mt-4 text-sm text-yellow-300 min-h-[20px]"></p>
+
+            <button onclick="startGame()" class="bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-400 hover:to-orange-500 text-white font-bold py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-transform text-xl fantasy-font">
+                Enter the Cycle
+            </button>
         </div>
     </div>
 
-    <div id="waitingScreen" class="hidden absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/90">
-        <h2 class="text-3xl fantasy-font text-white mb-4">Waiting for Opponent...</h2>
-        <div class="glass-panel p-6 rounded-xl flex flex-col items-center">
-            <p class="text-gray-400 text-sm mb-2">Share this Game ID:</p>
-            <div class="text-4xl font-mono text-yellow-400 tracking-widest bg-black/50 p-4 rounded mb-2 select-all" id="displayGameId">---</div>
-            <p class="text-xs text-gray-500">The game will start automatically when they join.</p>
-        </div>
-    </div>
-
+    <!-- Modal: Victory -->
     <div id="victoryModal" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md">
         <div class="glass-panel p-10 rounded-2xl text-center animate-bounce-in">
-            <h2 id="winnerText" class="text-6xl mb-4 fantasy-font text-yellow-400">Victory!</h2>
-            <button onclick="location.reload()" class="border-2 border-white/50 hover:bg-white/20 text-white font-bold py-2 px-6 rounded-full transition-colors">Main Menu</button>
+            <h2 id="winnerText" class="text-6xl mb-4 fantasy-font text-yellow-400">Solari Victory!</h2>
+            <p class="text-gray-300 mb-8">The cycle is broken.</p>
+            <button onclick="location.reload()" class="border-2 border-white/50 hover:bg-white/20 text-white font-bold py-2 px-6 rounded-full transition-colors">
+                Play Again
+            </button>
         </div>
     </div>
 
+    <!-- Game Header -->
     <div class="w-full max-w-4xl flex justify-between items-center px-6 py-4 mb-4 glass-panel rounded-xl mx-4 mt-4 z-10">
         <div class="flex flex-col">
-            <span class="text-xs uppercase tracking-widest text-gray-300">Phase</span>
-            <div class="flex items-center gap-2"><span id="phaseIcon" class="text-3xl">🌅</span><span id="phaseName" class="text-2xl font-bold fantasy-font">Dawn</span></div>
+            <span class="text-xs uppercase tracking-widest text-gray-300">Current Phase</span>
+            <div class="flex items-center gap-2">
+                <span id="phaseIcon" class="text-3xl">🌅</span>
+                <span id="phaseName" class="text-2xl font-bold fantasy-font">Dawn</span>
+            </div>
         </div>
+        
         <div class="flex flex-col items-center">
-            <div class="text-xs uppercase tracking-widest text-gray-300">You Are</div>
-            <div id="myFactionDisplay" class="text-2xl font-bold">...</div>
+            <div class="text-xs uppercase tracking-widest text-gray-300">Turn</div>
+            <div id="turnCounter" class="text-3xl font-bold">1</div>
         </div>
+
         <div class="flex flex-col items-end">
-            <span class="text-xs uppercase tracking-widest text-gray-300">Turn</span>
+            <span class="text-xs uppercase tracking-widest text-gray-300">Active Player</span>
             <span id="activePlayer" class="text-xl font-bold text-yellow-400">Solari</span>
         </div>
     </div>
 
+    <!-- Main Game Area -->
     <div class="relative w-full max-w-2xl aspect-square p-4">
-        <div id="gameBoard" class="board-container grid grid-cols-6 grid-rows-6 gap-1 w-full h-full bg-black/30 p-2 rounded-lg border-2 border-white/10 shadow-2xl"></div>
+        <!-- The Grid -->
+        <div id="gameBoard" class="board-container grid grid-cols-6 grid-rows-6 gap-1 w-full h-full bg-black/30 p-2 rounded-lg border-2 border-white/10 shadow-2xl">
+            <!-- Tiles generated by JS -->
+        </div>
     </div>
 
+    <!-- Footer / Stats -->
     <div class="mt-6 w-full max-w-4xl glass-panel rounded-xl p-4 flex justify-between items-center z-10 mx-4 mb-4">
-        <div id="infoPanel" class="text-sm text-gray-200">Waiting for game start...</div>
+        <div id="infoPanel" class="text-sm text-gray-200">
+            Hover over a unit to see details.
+        </div>
+        <div class="flex gap-4">
+             <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-yellow-500"></div> Solari
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-blue-500"></div> Lunari
+            </div>
+        </div>
     </div>
 
     <script>
-        // --- YOUR FIREBASE CONFIG GOES HERE ---
-        const firebaseConfig = {
-    apiKey: "AIzaSyA1Q_6jf1ttRtpmq_N84HOOAcXOE9y_oU8",
-    authDomain: "eclipse-dawn-online.firebaseapp.com",
-    databaseURL: "https://eclipse-dawn-online-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "eclipse-dawn-online",
-    storageBucket: "eclipse-dawn-online.firebasestorage.app",
-    messagingSenderId: "28834248478",
-    appId: "1:28834248478:web:ac9dea8816b5ee79103b0f"
-  };
-
-        // ---------------------------------------
-
-        // Initialize Firebase
-        try {
-            firebase.initializeApp(firebaseConfig);
-        } catch(e) {
-            console.error("Firebase Init Error:", e);
-            alert("Error initializing Firebase. Check your config keys.");
-        }
-        const db = firebase.database();
-
-        // Game Constants
+        // --- Game Config & State ---
         const BOARD_SIZE = 6;
+        
+        // Phases: Dawn (Neutral), Day (Solari+), Dusk (Neutral), Night (Lunari+), Eclipse (Both+)
         const PHASES = [
             { name: "Dawn", icon: "🌅", style: "bg-phase-dawn", solariMod: 0, lunariMod: 0, desc: "Balance restored." },
             { name: "Day", icon: "☀️", style: "bg-phase-day", solariMod: 1, lunariMod: -1, desc: "Solari units move further." },
@@ -126,148 +203,129 @@
             { name: "Eclipse", icon: "🌑", style: "bg-phase-eclipse", solariMod: 1, lunariMod: 1, desc: "CHAOS! Max range for all!" }
         ];
 
-        const UNIT_TYPES = {
-            essence: { name: "Essence", baseRange: 1, moveType: 'omni', desc: "Your life source. Protect it." },
-            ray: { name: "Ray", baseRange: 2, moveType: 'linear', desc: "Fast attacker." },
-            orbit: { name: "Orbit", baseRange: 2, moveType: 'diagonal', desc: "Tactical defender." }
+        let gameState = {
+            // FIX: Initialize board with nulls immediately so initial render doesn't crash
+            board: Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(null)),
+            turn: 1,
+            currentPlayer: 'solari', // 'solari' or 'lunari'
+            phaseIndex: 0,
+            selectedPiece: null, // {r, c}
+            gameOver: false
         };
 
+        // --- Asset Generation (SVG Strings) ---
         const SVGS = {
             solari: {
-                essence: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-lg"><circle cx="50" cy="50" r="40" fill="#fbbf24" /><circle cx="50" cy="50" r="30" stroke="white" stroke-width="3" fill="none"/><path d="M50 10 L50 90 M10 50 L90 50" stroke="white" stroke-width="4"/></svg>`,
+                essence: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-lg"><circle cx="50" cy="50" r="40" fill="url(#sunGradient)" /><circle cx="50" cy="50" r="30" stroke="white" stroke-width="3" fill="none"/><path d="M50 10 L50 90 M10 50 L90 50" stroke="white" stroke-width="4"/><defs><radialGradient id="sunGradient"><stop offset="0%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#b45309"/></radialGradient></defs></svg>`,
                 ray: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md"><path d="M50 15 L85 85 L50 70 L15 85 Z" fill="#f59e0b" stroke="white" stroke-width="2"/></svg>`,
-                orbit: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md"><rect x="25" y="25" width="50" height="50" rx="10" fill="#d97706" stroke="white" stroke-width="2"/></svg>`
+                orbit: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md"><rect x="25" y="25" width="50" height="50" rx="10" fill="#d97706" stroke="white" stroke-width="2"/><circle cx="50" cy="50" r="15" fill="white"/></svg>`
             },
             lunari: {
-                // Fixed: Simplified colors to avoid Gradient conflicts and ensure rendering
-                essence: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-lg"><circle cx="50" cy="50" r="40" fill="#1e3a8a" /><path d="M60 10 A 40 40 0 1 1 60 90 A 30 30 0 1 0 60 10" fill="#60a5fa" stroke="white" stroke-width="2"/></svg>`,
+                essence: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-lg"><path d="M60 10 A 40 40 0 1 1 60 90 A 30 30 0 1 0 60 10" fill="url(#moonGradient)" stroke="white" stroke-width="2"/><defs><linearGradient id="moonGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#1e3a8a"/></linearGradient></defs></svg>`,
                 ray: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md"><path d="M50 15 L85 85 L50 70 L15 85 Z" fill="#3b82f6" stroke="white" stroke-width="2" transform="rotate(180 50 50)"/></svg>`,
                 orbit: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md"><circle cx="50" cy="50" r="30" fill="none" stroke="#60a5fa" stroke-width="6"/><circle cx="50" cy="50" r="15" fill="#1d4ed8"/></svg>`
             }
         };
 
-        let myGameId = null;
-        let myFaction = null;
-        let gameState = null;
-        let selectedPiece = null;
-        let gameRef = null;
+        // --- Unit Definitions ---
+        // Range is [base, type]
+        // Type: 'linear' (rook-like), 'diagonal' (bishop-like), 'omni' (king-like)
+        const UNIT_TYPES = {
+            essence: { name: "Essence", hp: 1, baseRange: 1, moveType: 'omni', desc: "Your life source. Protect it." },
+            ray: { name: "Ray", hp: 1, baseRange: 2, moveType: 'linear', desc: "Fast attacker. Range scales with phase." },
+            orbit: { name: "Orbit", hp: 1, baseRange: 2, moveType: 'diagonal', desc: "Tactical defender. Range scales with phase." }
+        };
 
-        function generateId() { return Math.random().toString(36).substr(2, 6).toUpperCase(); }
+        // --- Initialization ---
 
-        function createGame() {
-            try {
-                const newId = generateId();
-                const initialBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(null));
-                setupPieces(initialBoard);
-
-                const initialState = {
-                    board: initialBoard,
-                    turn: 1,
-                    currentPlayer: 'solari',
-                    phaseIndex: 0,
-                    status: 'waiting', 
-                    lastMove: null
-                };
-
-                db.ref('games/' + newId).set(initialState)
-                    .then(() => {
-                        myGameId = newId;
-                        myFaction = 'solari';
-                        gameRef = db.ref('games/' + newId);
-                        document.getElementById('lobbyScreen').classList.add('hidden');
-                        document.getElementById('waitingScreen').classList.remove('hidden');
-                        document.getElementById('displayGameId').innerText = newId;
-                        initGameListener();
-                    })
-                    .catch(e => { alert("Firebase Error: " + e.message); console.error(e); });
-            } catch(e) { alert("Code Error: " + e.message); console.error(e); }
+        function startGame() {
+            document.getElementById('startModal').classList.add('hidden');
+            initBoard();
+            renderBoard();
+            updatePhaseUI();
         }
 
-        function joinGame() {
-            const inputId = document.getElementById('joinInput').value.toUpperCase().trim();
-            if(!inputId) return;
-            const ref = db.ref('games/' + inputId);
-            ref.once('value').then(snapshot => {
-                if(snapshot.exists()) {
-                    ref.update({ status: 'playing' });
-                    myGameId = inputId;
-                    myFaction = 'lunari';
-                    gameRef = ref;
-                    document.getElementById('lobbyScreen').classList.add('hidden');
-                    initGameListener();
-                } else {
-                    document.getElementById('lobbyStatus').innerText = "Game ID not found.";
-                }
-            });
+        function initBoard() {
+            // Reset grid
+            gameState.board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(null));
+
+            // Setup Solari (Top)
+            placePiece(0, 2, 'solari', 'essence');
+            placePiece(0, 1, 'solari', 'orbit');
+            placePiece(0, 3, 'solari', 'orbit');
+            placePiece(0, 0, 'solari', 'ray');
+            placePiece(0, 5, 'solari', 'ray');
+            
+            placePiece(1, 2, 'solari', 'ray'); // Vanguard
+
+            // Lunari Setup (Row 5 & 4)
+            placePiece(5, 3, 'lunari', 'essence');
+            placePiece(5, 2, 'lunari', 'orbit');
+            placePiece(5, 4, 'lunari', 'orbit');
+            placePiece(5, 0, 'lunari', 'ray');
+            placePiece(5, 5, 'lunari', 'ray');
+
+            placePiece(4, 3, 'lunari', 'ray'); // Vanguard
         }
 
-        function setupPieces(board) {
-            const place = (r, c, f, t) => board[r][c] = { faction: f, type: t };
-            // Solari
-            place(0, 2, 'solari', 'essence'); place(0, 1, 'solari', 'orbit'); place(0, 3, 'solari', 'orbit');
-            place(0, 0, 'solari', 'ray'); place(0, 5, 'solari', 'ray'); place(1, 2, 'solari', 'ray');
-            // Lunari
-            place(5, 3, 'lunari', 'essence'); place(5, 2, 'lunari', 'orbit'); place(5, 4, 'lunari', 'orbit');
-            place(5, 0, 'lunari', 'ray'); place(5, 5, 'lunari', 'ray'); place(4, 3, 'lunari', 'ray');
+        function placePiece(r, c, faction, type) {
+            gameState.board[r][c] = {
+                faction: faction,
+                type: type,
+                id: `${faction}-${type}-${r}-${c}`
+            };
         }
 
-        function initGameListener() {
-            gameRef.on('value', (snapshot) => {
-                const data = snapshot.val();
-                if(!data) return;
-                gameState = data;
-                if(myFaction === 'solari' && gameState.status === 'playing') document.getElementById('waitingScreen').classList.add('hidden');
-                if(gameState.status.includes('winner')) endGame(gameState.status.split('-')[1]);
-                updateUI();
-                renderBoard();
-            });
-        }
+        // --- Logic ---
 
-        function updateUI() {
-            if(!gameState) return;
-            const phase = PHASES[gameState.phaseIndex];
-            document.getElementById('gameBody').className = `h-screen w-screen flex flex-col items-center justify-center text-white transition-colors duration-1000 ${phase.style}`;
-            document.getElementById('phaseIcon').innerText = phase.icon;
-            document.getElementById('phaseName').innerText = phase.name;
-            const activeEl = document.getElementById('activePlayer');
-            activeEl.innerText = gameState.currentPlayer.toUpperCase();
-            activeEl.className = `text-xl font-bold ${gameState.currentPlayer === 'solari' ? 'text-yellow-400' : 'text-blue-400'}`;
-            const myFactionEl = document.getElementById('myFactionDisplay');
-            myFactionEl.innerText = myFaction.toUpperCase();
-            myFactionEl.className = `text-2xl font-bold ${myFaction === 'solari' ? 'text-yellow-400' : 'text-blue-400'}`;
-            const turnMsg = (gameState.currentPlayer === myFaction) ? "YOUR TURN" : "OPPONENT'S TURN";
-            document.getElementById('infoPanel').innerHTML = `<strong>${turnMsg}</strong> | ${phase.desc}`;
+        function getActivePhase() {
+            return PHASES[gameState.phaseIndex];
         }
 
         function getUnitRange(piece) {
-            const phase = PHASES[gameState.phaseIndex];
+            const phase = getActivePhase();
             const mod = piece.faction === 'solari' ? phase.solariMod : phase.lunariMod;
             const base = UNIT_TYPES[piece.type].baseRange;
             let final = base + mod;
-            if (final < 1) final = 1;
-            if (gameState.phaseIndex === 4) final = 4;
+            if (final < 1) final = 1; // Minimum movement is 1
+            if (gameState.phaseIndex === 4) final = 4; // Eclipse = chaotic range
             return final;
         }
 
         function getValidMoves(r, c) {
             const piece = gameState.board[r][c];
             if (!piece) return [];
+            
             const moves = [];
             const range = getUnitRange(piece);
             const type = UNIT_TYPES[piece.type].moveType;
+
             const directions = [];
-            if (type === 'linear' || type === 'omni') directions.push([0, 1], [0, -1], [1, 0], [-1, 0]);
-            if (type === 'diagonal' || type === 'omni') directions.push([1, 1], [1, -1], [-1, 1], [-1, -1]);
+            
+            if (type === 'linear' || type === 'omni') {
+                directions.push([0, 1], [0, -1], [1, 0], [-1, 0]);
+            }
+            if (type === 'diagonal' || type === 'omni') {
+                directions.push([1, 1], [1, -1], [-1, 1], [-1, -1]);
+            }
+
             for (let d of directions) {
                 for (let i = 1; i <= range; i++) {
                     const nr = r + (d[0] * i);
                     const nc = c + (d[1] * i);
+
+                    // Check bounds
                     if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE) break;
+
                     const target = gameState.board[nr][nc];
-                    if (target === null || target === undefined) {
+
+                    if (target === null) {
                         moves.push({r: nr, c: nc, type: 'move'});
                     } else {
-                        if (target.faction !== piece.faction) moves.push({r: nr, c: nc, type: 'attack'});
+                        if (target.faction !== piece.faction) {
+                            moves.push({r: nr, c: nc, type: 'attack'});
+                        }
+                        // Blocked by any piece (friend or foe)
                         break;
                     }
                 }
@@ -276,102 +334,164 @@
         }
 
         function handleTileClick(r, c) {
-            if (!gameState || gameState.status !== 'playing') return;
-            if (gameState.currentPlayer !== myFaction) { return; }
+            if (gameState.gameOver) return;
 
             const clickedPiece = gameState.board[r][c];
-            const isMyPiece = clickedPiece && clickedPiece.faction === myFaction;
+            const isCurrentFaction = clickedPiece && clickedPiece.faction === gameState.currentPlayer;
 
-            if (isMyPiece) {
-                selectedPiece = { r, c };
+            // 1. Select a piece
+            if (isCurrentFaction) {
+                gameState.selectedPiece = { r, c };
                 renderBoard();
+                updateInfoPanel(clickedPiece);
                 return;
             }
-            if (selectedPiece) {
-                const validMoves = getValidMoves(selectedPiece.r, selectedPiece.c);
+
+            // 2. Move to valid tile
+            if (gameState.selectedPiece) {
+                const validMoves = getValidMoves(gameState.selectedPiece.r, gameState.selectedPiece.c);
                 const move = validMoves.find(m => m.r === r && m.c === c);
+
                 if (move) {
-                    commitMove(move);
+                    executeMove(move);
                 } else {
-                    selectedPiece = null;
+                    // Deselect if clicking empty space or invalid
+                    gameState.selectedPiece = null;
                     renderBoard();
+                    document.getElementById('infoPanel').innerText = "Hover over a unit to see details.";
                 }
             }
         }
 
-        function commitMove(move) {
-            const fromR = selectedPiece.r;
-            const fromC = selectedPiece.c;
+        function executeMove(move) {
+            const fromR = gameState.selectedPiece.r;
+            const fromC = gameState.selectedPiece.c;
             const piece = gameState.board[fromR][fromC];
             const target = gameState.board[move.r][move.c];
 
-            const newBoard = JSON.parse(JSON.stringify(gameState.board));
-            newBoard[move.r][move.c] = piece;
-            newBoard[fromR][fromC] = null;
+            // Win Condition Check
+            if (target && target.type === 'essence') {
+                endGame(piece.faction);
+                return;
+            }
 
-            let newStatus = 'playing';
-            if (target && target.type === 'essence') newStatus = `winner-${piece.faction}`;
+            // FX
+            createParticles(move.r, move.c, move.type === 'attack' ? 'red' : 'white');
 
-            let newTurn = gameState.turn + 1;
-            let newPhaseIndex = Math.floor((newTurn - 1) / 4) % PHASES.length;
-            let nextPlayer = gameState.currentPlayer === 'solari' ? 'lunari' : 'solari';
+            // Update Board
+            gameState.board[move.r][move.c] = piece;
+            gameState.board[fromR][fromC] = null;
 
-            gameRef.update({
-                board: newBoard,
-                turn: newTurn,
-                phaseIndex: newPhaseIndex,
-                currentPlayer: nextPlayer,
-                status: newStatus,
-                lastMove: { from: {r: fromR, c: fromC}, to: move }
-            }).then(() => { selectedPiece = null; });
+            // Reset selection
+            gameState.selectedPiece = null;
+
+            // Next Turn
+            endTurn();
         }
+
+        function endTurn() {
+            gameState.turn++;
+            gameState.currentPlayer = gameState.currentPlayer === 'solari' ? 'lunari' : 'solari';
+            
+            // Update Phase Logic
+            // Cycle: Dawn(2 turns) -> Day(3 turns) -> Dusk(2 turns) -> Night(3 turns) -> Eclipse(1 turn) -> Repeat
+            // Simplified for better flow: Change every 3 turns of total play?
+            // Let's do: Change phase every 2 full rounds (4 total turns)
+            
+            const turnsPerPhase = 4;
+            const totalPhases = PHASES.length;
+            gameState.phaseIndex = Math.floor((gameState.turn - 1) / turnsPerPhase) % totalPhases;
+
+            updatePhaseUI();
+            renderBoard();
+        }
+
+        function updatePhaseUI() {
+            const phase = getActivePhase();
+            
+            // Update Body Background
+            const body = document.getElementById('gameBody');
+            body.className = `h-screen w-screen flex flex-col items-center justify-center text-white transition-colors duration-1000 ${phase.style}`;
+
+            // Update Header
+            document.getElementById('phaseIcon').innerText = phase.icon;
+            document.getElementById('phaseName').innerText = phase.name;
+            document.getElementById('turnCounter').innerText = gameState.turn;
+            
+            const pText = document.getElementById('activePlayer');
+            pText.innerText = gameState.currentPlayer === 'solari' ? 'SOLARI' : 'LUNARI';
+            pText.className = `text-xl font-bold ${gameState.currentPlayer === 'solari' ? 'text-yellow-400' : 'text-blue-400'}`;
+
+            // Toast/Notify
+            document.getElementById('infoPanel').innerHTML = `<strong>${phase.name}:</strong> ${phase.desc}`;
+        }
+
+        function endGame(winner) {
+            gameState.gameOver = true;
+            renderBoard();
+            const modal = document.getElementById('victoryModal');
+            const text = document.getElementById('winnerText');
+            
+            modal.classList.remove('hidden');
+            text.innerText = winner.toUpperCase() + " VICTORY!";
+            text.className = `text-6xl mb-4 fantasy-font ${winner === 'solari' ? 'text-yellow-400' : 'text-blue-400'}`;
+        }
+
+        // --- Rendering ---
 
         function renderBoard() {
             const boardEl = document.getElementById('gameBoard');
             boardEl.innerHTML = '';
+
             let validMoves = [];
-            if (selectedPiece && gameState.currentPlayer === myFaction) {
-                validMoves = getValidMoves(selectedPiece.r, selectedPiece.c);
+            if (gameState.selectedPiece) {
+                validMoves = getValidMoves(gameState.selectedPiece.r, gameState.selectedPiece.c);
             }
 
             for (let r = 0; r < BOARD_SIZE; r++) {
                 for (let c = 0; c < BOARD_SIZE; c++) {
                     const tile = document.createElement('div');
                     tile.className = `tile w-full h-full rounded bg-white/5 border border-white/5 relative flex items-center justify-center cursor-pointer`;
-                    if ((r + c) % 2 === 1) tile.classList.add('bg-white/10');
-                    if (selectedPiece && selectedPiece.r === r && selectedPiece.c === c) tile.classList.add('selected-tile');
                     
+                    // Checkerboard pattern opacity
+                    if ((r + c) % 2 === 1) {
+                        tile.classList.add('bg-white/10');
+                    }
+
+                    // Selection Highlight
+                    if (gameState.selectedPiece && gameState.selectedPiece.r === r && gameState.selectedPiece.c === c) {
+                        tile.classList.add('selected-tile');
+                    }
+
+                    // Move Highlights
                     const move = validMoves.find(m => m.r === r && m.c === c);
                     if (move) {
-                        tile.classList.add(move.type === 'attack' ? 'highlight-attack' : 'highlight-move');
-                        if(move.type === 'move') {
+                        if (move.type === 'attack') {
+                            tile.classList.add('highlight-attack');
+                        } else {
+                            tile.classList.add('highlight-move');
+                            // Add little dot indicator
                             const dot = document.createElement('div');
                             dot.className = "absolute w-3 h-3 bg-green-400 rounded-full opacity-50";
                             tile.appendChild(dot);
                         }
                     }
 
-                    // --- SAFE RENDER LOGIC ---
-                    try {
-                        const piece = gameState.board[r][c];
-                        if (piece) {
-                            const pieceEl = document.createElement('div');
-                            pieceEl.className = 'piece w-4/5 h-4/5';
-                            
-                            // Check if SVG exists
-                            if (SVGS[piece.faction] && SVGS[piece.faction][piece.type]) {
-                                pieceEl.innerHTML = SVGS[piece.faction][piece.type];
-                            } else {
-                                // Fallback if graphic is missing
-                                pieceEl.innerHTML = '<div class="w-full h-full bg-red-500 rounded-full flex items-center justify-center text-xs">?</div>';
-                                console.error(`Missing SVG for: ${piece.faction} ${piece.type}`);
-                            }
-                            tile.appendChild(pieceEl);
-                        }
-                    } catch (err) {
-                        console.error("Render error at", r, c, err);
+                    // Render Piece
+                    const piece = gameState.board[r][c];
+                    if (piece) {
+                        const pieceEl = document.createElement('div');
+                        pieceEl.className = 'piece w-4/5 h-4/5';
+                        pieceEl.innerHTML = SVGS[piece.faction][piece.type];
+                        
+                        // Rotate Lunari pieces to face up? No, abstract symbols are fine.
+                        // Actually, let's keep them oriented standard.
+                        
+                        tile.appendChild(pieceEl);
+                        
+                        // Hover logic
+                        tile.onmouseenter = () => updateInfoPanel(piece);
                     }
-                    // -------------------------
 
                     tile.onclick = () => handleTileClick(r, c);
                     boardEl.appendChild(tile);
@@ -379,12 +499,30 @@
             }
         }
 
-        function endGame(winner) {
-            document.getElementById('victoryModal').classList.remove('hidden');
-            const txt = document.getElementById('winnerText');
-            txt.innerText = winner.toUpperCase() + " WINS!";
-            txt.className = `text-6xl mb-4 fantasy-font ${winner === 'solari' ? 'text-yellow-400' : 'text-blue-400'}`;
+        function updateInfoPanel(piece) {
+            const panel = document.getElementById('infoPanel');
+            if (!piece) return;
+            
+            const def = UNIT_TYPES[piece.type];
+            const range = getUnitRange(piece);
+            const factionColor = piece.faction === 'solari' ? 'text-yellow-400' : 'text-blue-400';
+            
+            panel.innerHTML = `<span class="${factionColor} font-bold uppercase">${piece.faction} ${def.name}</span> | Range: <strong>${range}</strong> | ${def.desc}`;
         }
+
+        // FX
+        function createParticles(r, c, color) {
+            const board = document.getElementById('gameBoard');
+            const tileWidth = board.clientWidth / BOARD_SIZE;
+            
+            // Calculate pixel position relative to board
+            // This is rough approximation for visual flair
+            // Ideally we attach to the tile element itself
+        }
+
+        // --- Init ---
+        // Wait for modal start
+        renderBoard(); // Render empty board behind modal
     </script>
 </body>
 </html>
