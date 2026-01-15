@@ -96,6 +96,19 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        /* Particles */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            animation: float 1s linear forwards;
+            border-radius: 50%;
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-30px) scale(0); opacity: 0; }
+        }
+
     </style>
 </head>
 <body class="h-screen w-screen flex flex-col items-center justify-center text-white bg-phase-dawn transition-colors duration-1000" id="gameBody">
@@ -134,9 +147,10 @@
     <div id="waitingModal" class="hidden absolute inset-0 z-40 flex items-center justify-center bg-black/90 backdrop-blur-md">
         <div class="glass-panel p-10 rounded-2xl text-center">
             <h2 class="text-3xl mb-4 fantasy-font text-white">Waiting for Opponent</h2>
-            <div class="bg-white/10 p-4 rounded-lg mb-4">
+            <div class="bg-white/10 p-4 rounded-lg mb-4 cursor-pointer hover:bg-white/20 transition-colors" onclick="copyCode()" title="Click to Copy">
                 <p class="text-gray-400 text-sm mb-1 uppercase tracking-widest">Share Game Code</p>
-                <p id="displayGameCode" class="text-5xl font-mono font-bold text-yellow-400 tracking-wider select-all cursor-pointer" onclick="copyCode()">---</p>
+                <p id="displayGameCode" class="text-5xl font-mono font-bold text-yellow-400 tracking-wider select-all">---</p>
+                <p id="copyFeedback" class="text-xs text-green-400 mt-2 h-4"></p>
             </div>
             <p class="text-gray-400 animate-pulse">Waiting for Player 2 (Lunari) to join...</p>
         </div>
@@ -385,8 +399,34 @@
 
         function copyCode() {
             const code = document.getElementById('displayGameCode').innerText;
-            navigator.clipboard.writeText(code);
-            // Visual feedback could go here
+            const feedback = document.getElementById('copyFeedback');
+            
+            // Robust clipboard copy fallback
+            const textArea = document.createElement("textarea");
+            textArea.value = code;
+            
+            // Ensure textarea is not visible but part of DOM
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if(successful) {
+                    feedback.innerText = "COPIED!";
+                    setTimeout(() => feedback.innerText = "", 2000);
+                } else {
+                     feedback.innerText = "Failed to Copy";
+                }
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+            }
+            
+            document.body.removeChild(textArea);
         }
 
         // --- Game Logic ---
@@ -541,6 +581,9 @@
             // Move
             newBoard[move.r][move.c] = piece;
             newBoard[fromR][fromC] = null;
+            
+            // FX (Restored)
+            createParticles(move.r, move.c, move.type === 'attack' ? 'red' : 'white');
 
             // Turn Logic
             const nextTurn = gameState.turn + 1;
@@ -625,8 +668,34 @@
                     }
 
                     // Click -> Global handler
-                    tile.onclick = () => window.handleTileClick(r, c);
+                    tile.onclick = () => {
+                        if (window.handleTileClick) window.handleTileClick(r, c);
+                    };
                     boardEl.appendChild(tile);
+                }
+            }
+        }
+
+        function createParticles(r, c, color) {
+            const boardEl = document.getElementById('gameBoard');
+            // This is a simple visual estimation based on grid percentage
+            // Ideally we'd append to the specific tile, but tile elements are rebuilt often.
+            // Let's create a temporary overlay or just simple flash.
+            
+            // Actually, we can append to the tile at index (r * size + c)
+            const tileIndex = r * BOARD_SIZE + c;
+            const tile = boardEl.children[tileIndex];
+            
+            if (tile) {
+                for(let i=0; i<5; i++) {
+                    const p = document.createElement('div');
+                    p.className = `particle w-2 h-2 ${color === 'red' ? 'bg-red-500' : 'bg-white'}`;
+                    // Random offsets
+                    p.style.left = (50 + (Math.random() * 40 - 20)) + '%';
+                    p.style.top = (50 + (Math.random() * 40 - 20)) + '%';
+                    tile.appendChild(p);
+                    // Cleanup
+                    setTimeout(() => p.remove(), 1000);
                 }
             }
         }
