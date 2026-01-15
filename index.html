@@ -124,8 +124,11 @@
             
             <!-- Auth Loading -->
             <div id="authLoader" class="flex flex-col items-center justify-center py-8">
-                <div class="loader mb-4"></div>
+                <div id="spinner" class="loader mb-4"></div>
                 <p id="loadingText">Connecting to Celestial Network...</p>
+                <div id="errorHelp" class="hidden mt-4 text-sm text-red-300 bg-red-900/50 p-2 rounded border border-red-500">
+                    <!-- Error details will go here -->
+                </div>
             </div>
 
             <!-- Main Menu -->
@@ -307,26 +310,60 @@
         async function startAuth() {
             document.getElementById('authLoader').classList.remove('hidden');
             
-            // If in previewer, use custom token. Else anonymous.
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                try {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } catch(e) {
-                    console.warn("Custom token failed, falling back to anon", e);
+            try {
+                // If in previewer, use custom token. Else anonymous.
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } catch(e) {
+                        console.warn("Custom token failed, falling back to anon", e);
+                        await signInAnonymously(auth);
+                    }
+                } else {
                     await signInAnonymously(auth);
                 }
-            } else {
-                await signInAnonymously(auth);
-            }
 
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    currentUser = user;
-                    document.getElementById('authLoader').classList.add('hidden');
-                    document.getElementById('mainMenu').classList.remove('hidden');
-                    document.getElementById('mainMenu').classList.add('flex');
+                // Listen for Auth State
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUser = user;
+                        document.getElementById('authLoader').classList.add('hidden');
+                        document.getElementById('mainMenu').classList.remove('hidden');
+                        document.getElementById('mainMenu').classList.add('flex');
+                    }
+                });
+
+            } catch (error) {
+                console.error("Authentication Error:", error);
+                
+                // Show Error in UI
+                document.getElementById('spinner').classList.add('hidden');
+                const loadingText = document.getElementById('loadingText');
+                const errorHelp = document.getElementById('errorHelp');
+                
+                loadingText.innerText = "Connection Failed";
+                loadingText.classList.add('text-red-400', 'font-bold');
+                
+                errorHelp.classList.remove('hidden');
+                
+                if (error.code === 'auth/operation-not-allowed') {
+                    errorHelp.innerHTML = `
+                        <strong>Error: Operation Not Allowed</strong><br>
+                        You must enable <strong>Anonymous Authentication</strong> in your Firebase Console.<br>
+                        <br>
+                        1. Go to console.firebase.google.com<br>
+                        2. Select Project > Build > Authentication<br>
+                        3. Sign-in method > Enable "Anonymous"
+                    `;
+                } else if (error.code === 'auth/configuration-not-found') {
+                    errorHelp.innerHTML = `
+                        <strong>Error: Configuration Not Found</strong><br>
+                        Check your API Key and Project ID.
+                    `;
+                } else {
+                    errorHelp.innerText = "Error: " + error.message;
                 }
-            });
+            }
         }
 
         // --- Config UI Logic ---
@@ -769,7 +806,12 @@
         }
 
         // --- Start ---
-        initFirebase();
+        // Ensure initial render of auth check
+        try {
+            initFirebase();
+        } catch(e) {
+            console.error("Critical Startup Error", e);
+        }
 
     </script>
 </body>
