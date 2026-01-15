@@ -17,16 +17,19 @@
         @media (max-width: 768px) { .board-container { transform: none; } }
         .tile { transition: all 0.3s ease; position: relative; }
         .tile:hover { filter: brightness(1.2); transform: translateY(-2px); z-index: 10; }
-        .piece-enter { animation: dropIn 0.5s ease-out; }
-        @keyframes dropIn { 0% { opacity: 0; transform: translateY(-50px) scale(1.5); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+        
+        /* Animations */
         .highlight-move { background-color: rgba(34, 197, 94, 0.3); box-shadow: inset 0 0 15px rgba(34, 197, 94, 0.6); }
         .highlight-attack { background-color: rgba(239, 68, 68, 0.3); box-shadow: inset 0 0 15px rgba(239, 68, 68, 0.6); }
         .selected-tile { box-shadow: inset 0 0 0 4px #fbbf24; }
+        
+        /* Phases */
         .bg-phase-dawn { background: linear-gradient(135deg, #2c3e50, #fd746c); }
         .bg-phase-day { background: linear-gradient(135deg, #fceabb, #f8b500); }
         .bg-phase-dusk { background: linear-gradient(135deg, #4b6cb7, #182848); }
         .bg-phase-night { background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); }
         .bg-phase-eclipse { background: linear-gradient(135deg, #232526, #414345); }
+        
         .glass-panel { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37); }
     </style>
 </head>
@@ -35,7 +38,7 @@
     <div id="lobbyScreen" class="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
         <div class="glass-panel p-8 rounded-2xl max-w-lg text-center mx-4 w-full">
             <h1 class="text-5xl mb-2 text-yellow-400">Eclipse & Dawn</h1>
-            <p class="text-gray-300 mb-8">Online Multiplayer</p>
+            <p class="text-gray-300 mb-8">Online Multiplayer (Fixed)</p>
             
             <div class="space-y-4">
                 <button onclick="createGame()" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-lg fantasy-font">
@@ -91,7 +94,7 @@
     </div>
 
     <script>
-        // --- PASTE YOUR FIREBASE CONFIG HERE ---
+        // --- YOUR FIREBASE CONFIG GOES HERE ---
         const firebaseConfig = {
     apiKey: "AIzaSyA1Q_6jf1ttRtpmq_N84HOOAcXOE9y_oU8",
     authDomain: "eclipse-dawn-online.firebaseapp.com",
@@ -102,10 +105,15 @@
     appId: "1:28834248478:web:ac9dea8816b5ee79103b0f"
   };
 
-        // ----------------------------------------
+        // ---------------------------------------
 
         // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
+        try {
+            firebase.initializeApp(firebaseConfig);
+        } catch(e) {
+            console.error("Firebase Init Error:", e);
+            alert("Error initializing Firebase. Check your config keys.");
+        }
         const db = firebase.database();
 
         // Game Constants
@@ -131,69 +139,60 @@
                 orbit: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md"><rect x="25" y="25" width="50" height="50" rx="10" fill="#d97706" stroke="white" stroke-width="2"/></svg>`
             },
             lunari: {
+                // Fixed: Simplified colors to avoid Gradient conflicts and ensure rendering
                 essence: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-lg"><circle cx="50" cy="50" r="40" fill="#1e3a8a" /><path d="M60 10 A 40 40 0 1 1 60 90 A 30 30 0 1 0 60 10" fill="#60a5fa" stroke="white" stroke-width="2"/></svg>`,
                 ray: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md"><path d="M50 15 L85 85 L50 70 L15 85 Z" fill="#3b82f6" stroke="white" stroke-width="2" transform="rotate(180 50 50)"/></svg>`,
                 orbit: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md"><circle cx="50" cy="50" r="30" fill="none" stroke="#60a5fa" stroke-width="6"/><circle cx="50" cy="50" r="15" fill="#1d4ed8"/></svg>`
             }
         };
 
-        // State
         let myGameId = null;
-        let myFaction = null; // 'solari' or 'lunari'
+        let myFaction = null;
         let gameState = null;
         let selectedPiece = null;
         let gameRef = null;
 
-        // --- LOBBY LOGIC ---
-
-        function generateId() {
-            return Math.random().toString(36).substr(2, 6).toUpperCase();
-        }
+        function generateId() { return Math.random().toString(36).substr(2, 6).toUpperCase(); }
 
         function createGame() {
-            const newId = generateId();
-            const initialBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(null));
-            
-            // Standard Setup
-            setupPieces(initialBoard);
+            try {
+                const newId = generateId();
+                const initialBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(null));
+                setupPieces(initialBoard);
 
-            const initialState = {
-                board: initialBoard,
-                turn: 1,
-                currentPlayer: 'solari',
-                phaseIndex: 0,
-                status: 'waiting', // waiting, playing, winner-solari, winner-lunari
-                lastMove: null
-            };
+                const initialState = {
+                    board: initialBoard,
+                    turn: 1,
+                    currentPlayer: 'solari',
+                    phaseIndex: 0,
+                    status: 'waiting', 
+                    lastMove: null
+                };
 
-            db.ref('games/' + newId).set(initialState)
-                .then(() => {
-                    myGameId = newId;
-                    myFaction = 'solari';
-                    gameRef = db.ref('games/' + newId);
-                    
-                    document.getElementById('lobbyScreen').classList.add('hidden');
-                    document.getElementById('waitingScreen').classList.remove('hidden');
-                    document.getElementById('displayGameId').innerText = newId;
-                    
-                    initGameListener();
-                });
+                db.ref('games/' + newId).set(initialState)
+                    .then(() => {
+                        myGameId = newId;
+                        myFaction = 'solari';
+                        gameRef = db.ref('games/' + newId);
+                        document.getElementById('lobbyScreen').classList.add('hidden');
+                        document.getElementById('waitingScreen').classList.remove('hidden');
+                        document.getElementById('displayGameId').innerText = newId;
+                        initGameListener();
+                    })
+                    .catch(e => { alert("Firebase Error: " + e.message); console.error(e); });
+            } catch(e) { alert("Code Error: " + e.message); console.error(e); }
         }
 
         function joinGame() {
             const inputId = document.getElementById('joinInput').value.toUpperCase().trim();
             if(!inputId) return;
-
             const ref = db.ref('games/' + inputId);
             ref.once('value').then(snapshot => {
                 if(snapshot.exists()) {
-                    // Update status to playing
                     ref.update({ status: 'playing' });
-                    
                     myGameId = inputId;
                     myFaction = 'lunari';
                     gameRef = ref;
-                    
                     document.getElementById('lobbyScreen').classList.add('hidden');
                     initGameListener();
                 } else {
@@ -204,63 +203,41 @@
 
         function setupPieces(board) {
             const place = (r, c, f, t) => board[r][c] = { faction: f, type: t };
-            
-            // Solari (Top)
+            // Solari
             place(0, 2, 'solari', 'essence'); place(0, 1, 'solari', 'orbit'); place(0, 3, 'solari', 'orbit');
             place(0, 0, 'solari', 'ray'); place(0, 5, 'solari', 'ray'); place(1, 2, 'solari', 'ray');
-
-            // Lunari (Bottom)
+            // Lunari
             place(5, 3, 'lunari', 'essence'); place(5, 2, 'lunari', 'orbit'); place(5, 4, 'lunari', 'orbit');
             place(5, 0, 'lunari', 'ray'); place(5, 5, 'lunari', 'ray'); place(4, 3, 'lunari', 'ray');
         }
 
-        // --- GAME LOOP & SYNC ---
-
         function initGameListener() {
             gameRef.on('value', (snapshot) => {
                 const data = snapshot.val();
-                if(!data) return; // Game deleted
-
+                if(!data) return;
                 gameState = data;
-                
-                // If waiting host sees status change to playing
-                if(myFaction === 'solari' && gameState.status === 'playing') {
-                    document.getElementById('waitingScreen').classList.add('hidden');
-                }
-
-                if(gameState.status.includes('winner')) {
-                    endGame(gameState.status.split('-')[1]);
-                }
-
+                if(myFaction === 'solari' && gameState.status === 'playing') document.getElementById('waitingScreen').classList.add('hidden');
+                if(gameState.status.includes('winner')) endGame(gameState.status.split('-')[1]);
                 updateUI();
                 renderBoard();
             });
         }
 
         function updateUI() {
+            if(!gameState) return;
             const phase = PHASES[gameState.phaseIndex];
-            
-            // Background
             document.getElementById('gameBody').className = `h-screen w-screen flex flex-col items-center justify-center text-white transition-colors duration-1000 ${phase.style}`;
-            
-            // Header
             document.getElementById('phaseIcon').innerText = phase.icon;
             document.getElementById('phaseName').innerText = phase.name;
-            
             const activeEl = document.getElementById('activePlayer');
             activeEl.innerText = gameState.currentPlayer.toUpperCase();
             activeEl.className = `text-xl font-bold ${gameState.currentPlayer === 'solari' ? 'text-yellow-400' : 'text-blue-400'}`;
-
             const myFactionEl = document.getElementById('myFactionDisplay');
             myFactionEl.innerText = myFaction.toUpperCase();
             myFactionEl.className = `text-2xl font-bold ${myFaction === 'solari' ? 'text-yellow-400' : 'text-blue-400'}`;
-
-            // Info Panel
             const turnMsg = (gameState.currentPlayer === myFaction) ? "YOUR TURN" : "OPPONENT'S TURN";
             document.getElementById('infoPanel').innerHTML = `<strong>${turnMsg}</strong> | ${phase.desc}`;
         }
-
-        // --- INTERACTION LOGIC ---
 
         function getUnitRange(piece) {
             const phase = PHASES[gameState.phaseIndex];
@@ -268,30 +245,26 @@
             const base = UNIT_TYPES[piece.type].baseRange;
             let final = base + mod;
             if (final < 1) final = 1;
-            if (gameState.phaseIndex === 4) final = 4; // Eclipse
+            if (gameState.phaseIndex === 4) final = 4;
             return final;
         }
 
         function getValidMoves(r, c) {
             const piece = gameState.board[r][c];
             if (!piece) return [];
-            
             const moves = [];
             const range = getUnitRange(piece);
             const type = UNIT_TYPES[piece.type].moveType;
             const directions = [];
-            
             if (type === 'linear' || type === 'omni') directions.push([0, 1], [0, -1], [1, 0], [-1, 0]);
             if (type === 'diagonal' || type === 'omni') directions.push([1, 1], [1, -1], [-1, 1], [-1, -1]);
-
             for (let d of directions) {
                 for (let i = 1; i <= range; i++) {
                     const nr = r + (d[0] * i);
                     const nc = c + (d[1] * i);
                     if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE) break;
-                    
                     const target = gameState.board[nr][nc];
-                    if (target === null || target === undefined) { // Check undefined for safe JSON parsing
+                    if (target === null || target === undefined) {
                         moves.push({r: nr, c: nc, type: 'move'});
                     } else {
                         if (target.faction !== piece.faction) moves.push({r: nr, c: nc, type: 'attack'});
@@ -304,26 +277,19 @@
 
         function handleTileClick(r, c) {
             if (!gameState || gameState.status !== 'playing') return;
-            if (gameState.currentPlayer !== myFaction) {
-                alert("Wait for your turn!");
-                return;
-            }
+            if (gameState.currentPlayer !== myFaction) { return; }
 
             const clickedPiece = gameState.board[r][c];
             const isMyPiece = clickedPiece && clickedPiece.faction === myFaction;
 
-            // 1. Select
             if (isMyPiece) {
                 selectedPiece = { r, c };
                 renderBoard();
                 return;
             }
-
-            // 2. Move
             if (selectedPiece) {
                 const validMoves = getValidMoves(selectedPiece.r, selectedPiece.c);
                 const move = validMoves.find(m => m.r === r && m.c === c);
-                
                 if (move) {
                     commitMove(move);
                 } else {
@@ -339,22 +305,17 @@
             const piece = gameState.board[fromR][fromC];
             const target = gameState.board[move.r][move.c];
 
-            // Update Board State locally to prepare payload
-            const newBoard = JSON.parse(JSON.stringify(gameState.board)); // Deep copy
+            const newBoard = JSON.parse(JSON.stringify(gameState.board));
             newBoard[move.r][move.c] = piece;
             newBoard[fromR][fromC] = null;
 
             let newStatus = 'playing';
-            if (target && target.type === 'essence') {
-                newStatus = `winner-${piece.faction}`;
-            }
+            if (target && target.type === 'essence') newStatus = `winner-${piece.faction}`;
 
-            // Phase Logic
             let newTurn = gameState.turn + 1;
             let newPhaseIndex = Math.floor((newTurn - 1) / 4) % PHASES.length;
             let nextPlayer = gameState.currentPlayer === 'solari' ? 'lunari' : 'solari';
 
-            // Push to Firebase
             gameRef.update({
                 board: newBoard,
                 turn: newTurn,
@@ -362,15 +323,12 @@
                 currentPlayer: nextPlayer,
                 status: newStatus,
                 lastMove: { from: {r: fromR, c: fromC}, to: move }
-            }).then(() => {
-                selectedPiece = null;
-            });
+            }).then(() => { selectedPiece = null; });
         }
 
         function renderBoard() {
             const boardEl = document.getElementById('gameBoard');
             boardEl.innerHTML = '';
-            
             let validMoves = [];
             if (selectedPiece && gameState.currentPlayer === myFaction) {
                 validMoves = getValidMoves(selectedPiece.r, selectedPiece.c);
@@ -379,18 +337,10 @@
             for (let r = 0; r < BOARD_SIZE; r++) {
                 for (let c = 0; c < BOARD_SIZE; c++) {
                     const tile = document.createElement('div');
-                    // Invert board for Lunari so they play from bottom up visually? 
-                    // For simplicity, let's keep absolute coords but maybe rotate the container later.
-                    
                     tile.className = `tile w-full h-full rounded bg-white/5 border border-white/5 relative flex items-center justify-center cursor-pointer`;
                     if ((r + c) % 2 === 1) tile.classList.add('bg-white/10');
+                    if (selectedPiece && selectedPiece.r === r && selectedPiece.c === c) tile.classList.add('selected-tile');
                     
-                    // Selected
-                    if (selectedPiece && selectedPiece.r === r && selectedPiece.c === c) {
-                        tile.classList.add('selected-tile');
-                    }
-
-                    // Highlights
                     const move = validMoves.find(m => m.r === r && m.c === c);
                     if (move) {
                         tile.classList.add(move.type === 'attack' ? 'highlight-attack' : 'highlight-move');
@@ -401,14 +351,27 @@
                         }
                     }
 
-                    // Piece
-                    const piece = gameState.board[r][c];
-                    if (piece) {
-                        const pieceEl = document.createElement('div');
-                        pieceEl.className = 'piece w-4/5 h-4/5';
-                        pieceEl.innerHTML = SVGS[piece.faction][piece.type];
-                        tile.appendChild(pieceEl);
+                    // --- SAFE RENDER LOGIC ---
+                    try {
+                        const piece = gameState.board[r][c];
+                        if (piece) {
+                            const pieceEl = document.createElement('div');
+                            pieceEl.className = 'piece w-4/5 h-4/5';
+                            
+                            // Check if SVG exists
+                            if (SVGS[piece.faction] && SVGS[piece.faction][piece.type]) {
+                                pieceEl.innerHTML = SVGS[piece.faction][piece.type];
+                            } else {
+                                // Fallback if graphic is missing
+                                pieceEl.innerHTML = '<div class="w-full h-full bg-red-500 rounded-full flex items-center justify-center text-xs">?</div>';
+                                console.error(`Missing SVG for: ${piece.faction} ${piece.type}`);
+                            }
+                            tile.appendChild(pieceEl);
+                        }
+                    } catch (err) {
+                        console.error("Render error at", r, c, err);
                     }
+                    // -------------------------
 
                     tile.onclick = () => handleTileClick(r, c);
                     boardEl.appendChild(tile);
@@ -422,8 +385,6 @@
             txt.innerText = winner.toUpperCase() + " WINS!";
             txt.className = `text-6xl mb-4 fantasy-font ${winner === 'solari' ? 'text-yellow-400' : 'text-blue-400'}`;
         }
-
     </script>
 </body>
 </html>
-
