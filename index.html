@@ -123,6 +123,9 @@
                 <div class="loader"></div> <span class="ml-3">Connecting to Cycle...</span>
             </div>
 
+            <!-- New Error Container -->
+            <div id="globalError" class="hidden text-red-300 text-sm mb-4 p-3 bg-red-900/50 rounded border border-red-500/50"></div>
+
             <div id="lobbyControls" class="hidden space-y-4">
                 <button onclick="createGame()" class="w-full bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-400 hover:to-orange-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg text-xl fantasy-font">
                     Create New Game
@@ -293,7 +296,21 @@
                 window.handleTileClick = handleTileClick;
             } catch (error) {
                 console.error("Auth failed", error);
-                document.getElementById('errorMsg').innerText = "Connection Failed. Refresh.";
+                
+                // UI Updates on Error
+                document.getElementById('authLoader').classList.add('hidden');
+                const errDiv = document.getElementById('globalError');
+                errDiv.classList.remove('hidden');
+                
+                let msg = "Connection Failed: ";
+                if (error.code === 'auth/unauthorized-domain') {
+                    msg += "Unauthorized Domain. Go to Firebase Console > Auth > Settings and add this domain.";
+                } else if (error.code === 'auth/api-key-not-valid') {
+                    msg += "Invalid API Key.";
+                } else {
+                    msg += error.message;
+                }
+                errDiv.innerText = msg;
             }
         }
         init();
